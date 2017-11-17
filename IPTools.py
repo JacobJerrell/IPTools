@@ -86,9 +86,6 @@ class HandleInput(ValidateInput):
             while len(self.arg) < 32:
                 self.arg = self.arg + '0'
             self.inBinary = self.arg
-        elif self.validated == 'junk':
-            self.inDecimal == False
-            self.inBinary == False
 
     def toDecimal(self, arg):
         while len(arg) < 32:
@@ -158,6 +155,44 @@ interpret('192.168.1.1', 'decimal') # Should pass invalid char, and decimal test
 interpret('192.256.13.444', 'decimal') # Should pass invalid char, and fail decimal test
 interpret('192.168', 'decimal') # Should pass invalid char, and pass IPv4 Test
 """
+# Testing the process of splitting /24 type arguments
+'''
+slash = argument.split('/')
+print(slash)
+octets = slash[0].split('.')
+print(octets)
+slashMask = int(slash[1])
+print(type(slashMask))
+mask = ""
+while slashMask:
+    mask = mask + "1"
+    slashMask -= 1
+if len(mask) < 32:
+    add = 32 - len(mask)
+    while add:
+        mask = mask + "0"
+        add -= 1
+
+print(mask)
+'''
+
+# From old file. Extra the 'wack' logic. discard the rest
+# def simplifyIP(ip):
+#     # Check for wack
+#     if '/' in ip:
+#         separate = ip.split('/')        # separate[0] = everything before the wack
+#                                         # separate[1] = everything after the wack
+#         IPInfo['ip'] = separate[0]      # Assign the dotted decimal IP to the IPInfo dict
+#         # Prepare to make the mask
+#         maskBits = int(separate[1])     # Make the str an int
+#         wackLogic(maskBits)             # Pass it to wackLogic to build the mask
+#         ip = IPInfo['ip']
+#     if len(ip.split('.')) <= 4:
+#         octets = ip.split('.')          # Find the octets
+#         while len(octets) < 4:          # Handle partial IPs
+#             octets.append('0')
+#         IPInfo['ip'] = '.'.join(octets)
+#     IPInfo['binaryIP'] = toBinary(IPInfo['ip'])
 
 # def toBinary(arg):
 #     if interpret(arg, 'decimal'):
