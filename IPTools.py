@@ -9,7 +9,7 @@ import re
 
 # Constants
 NONBINARY = '23456789'
-JUNK = " \t\n\r\v\fabcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ""!""#$%&'()*+,-/:;<=>?@[\]^_`{|}~"""
+JUNK = " \t\n\r\v\fabcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ""!""#$%&'()*+,-:;<=>?@[\\]^_`{|}~"""
 IPV4_RE = re.compile('^(?:(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])(\\.(?!$)|$)){4}$')
 
 ################
@@ -36,12 +36,17 @@ class InputError(Error):
 class ValidateInput(object):
     def __init__(self, arg):
         self.arg = arg
+        if '/' in self.arg:
+            self.wack = self.arg.split('/')[1]
+            self.arg = self.arg.split('/')[0]
+        else:
+            self.arg = arg
         self.junk = JUNK
         self.nonbinary = NONBINARY
-        self.re = IPV4_RE
-        self.junk = self.junk_finder(arg)
-        self.ipv4 = self.valid_ipv4(arg)
-        self.binary = self.valid_binary(arg)
+        self.reg = IPV4_RE
+        self.junk = self.junk_finder(self.arg)
+        self.ipv4 = self.valid_ipv4(self.arg)
+        self.binary = self.valid_binary(self.arg)
         if self.junk:
             raise InputError(arg, 'Found invalid characters in provided string.')
             # self.validated = 'junk'
@@ -59,7 +64,7 @@ class ValidateInput(object):
             return False
 
     def valid_ipv4(self, arg):
-        if self.re.match(str(arg)):
+        if self.reg.match(str(arg)):
             return True
         else:
             return False
@@ -76,18 +81,31 @@ class ValidateInput(object):
 ###########
 class HandleInput(ValidateInput):
     def __init__(self, arg):
-        super().__init__(arg)
         self.arg = arg
+        super().__init__(self.arg)
         if self.validated == 'ipv4':
             self.inDecimal = self.arg
-            self.inBinary = self.toBinary(arg)
+            self.inBinary = self.toBinary(self.arg)
         elif self.validated == 'binary':
-            self.inDecimal = self.toDecimal(arg)
+            self.inDecimal = self.toDecimal(self.arg)
             while len(self.arg) < 32:
                 self.arg = self.arg + '0'
             self.inBinary = self.arg
+        if self.wack:
+            self.binaryMask = self.toMask(self.wack)
+            self.decimalMask = self.toDecimal(self.binaryMask)
+            self.network_info = self._calcNetworks(self.wack)
+            self.network_id = self._calcNetID(self.inBinary, self.wack)
+            self.network_range = self._calcNetRange(self.wack)
+            self.last_ip = self._calcNetRange(self.wack)
+            self.network_stats = {'MaxSubnets': self.network_info[0],
+                                  'MaxHosts': self.network_info[1],
+                                  'Network ID': self.network_id,
+                                  'First IP': self.network_range[0],
+                                  'Last IP': self.network_range[1]}
 
     def toDecimal(self, arg):
+        arg = str(arg)
         while len(arg) < 32:
             arg = arg + '0'
         if '.' in arg:
@@ -109,94 +127,43 @@ class HandleInput(ValidateInput):
         while len(binary) < 32:
             binary = binary + '0'
         return binary
-        
+    
+    def toMask(self, wack):
+        wack = int(wack)
+        binary_mask = ''
+        while wack > 0:
+            binary_mask = binary_mask + '1'
+            wack -= 1
+        while len(binary_mask) < 32:
+            binary_mask = binary_mask + '0'
+        return binary_mask
 
-# def interpret(arg, expected):
-#     # First check for invalid characters:
-#     if any((c in JUNK) for c in arg):
-#         print('Found invalid character.')
-#         return False
-#     # Test for nonbinary digits
-#     if expected == 'binary':
-#         if any((d in NONBINARY) for d in arg):
-#             print('Passed invalid char test. Failed binary test.')
-#             return False
-#         else:
-#             print('Passed invalid char test. Passed binary test')
-#             return True
-#     if expected == 'decimal':
-#         # Fix partial IP addresses
-#         while len(arg.split('.')) < 4:
-#             print('Had to add .0 to string')
-#             arg = arg + '.0'
-#         # Test for valid IPv4 address
-#         if validIPv4(arg):
-#             print('Passed invalid char test. Passed validIPv4 address test.')
-#             return True
-#         else:
-#             print('Passed invalid char test. Failed validIPv4 address test.')
-#             return False
-#     # Test for valid wack format
-#     if expected == 'wack':
-#         if int(arg) > 32 or int(arg) < 0:
-#             print('Passed invalid char test. Expected 0-32. Got something else')
-#             return False
-#         else:
-#             return True
+    def _calcNetworks(self, wack):
+        maskBits = int(wack)
+        maxSubnets = 2**(32-maskBits)
+        maxHosts = 2**(32-maskBits) - 2
+        NetInfo = [maxSubnets, maxHosts]
+        return maxSubnets, maxHosts
 
-"""
-# Test Interpret Function
-# TODO: Major logic changes in the above code
-interpret('a', 'binary') # Should fail invalid char test
-interpret('a', 'decimal') # Should fail invalid char test
-interpret('234', 'binary') # Should pass invalid char, and fail binary test
-interpret('11111011101111', 'binary') # Should pass invalid char, and binary test
-interpret('192.168.1.1', 'decimal') # Should pass invalid char, and decimal test
-interpret('192.256.13.444', 'decimal') # Should pass invalid char, and fail decimal test
-interpret('192.168', 'decimal') # Should pass invalid char, and pass IPv4 Test
-"""
-# Testing the process of splitting /24 type arguments
-'''
-slash = argument.split('/')
-print(slash)
-octets = slash[0].split('.')
-print(octets)
-slashMask = int(slash[1])
-print(type(slashMask))
-mask = ""
-while slashMask:
-    mask = mask + "1"
-    slashMask -= 1
-if len(mask) < 32:
-    add = 32 - len(mask)
-    while add:
-        mask = mask + "0"
-        add -= 1
+    def _calcNetID(self, ip, wack):
+        netID = ip[:int(wack)]
+        while len(netID) < 32:
+            netID = netID + '0'
+        return self.toDecimal(netID)
 
-print(mask)
-'''
-
-# From old file. Extra the 'wack' logic. discard the rest
-# def simplifyIP(ip):
-#     # Check for wack
-#     if '/' in ip:
-#         separate = ip.split('/')        # separate[0] = everything before the wack
-#                                         # separate[1] = everything after the wack
-#         IPInfo['ip'] = separate[0]      # Assign the dotted decimal IP to the IPInfo dict
-#         # Prepare to make the mask
-#         maskBits = int(separate[1])     # Make the str an int
-#         wackLogic(maskBits)             # Pass it to wackLogic to build the mask
-#         ip = IPInfo['ip']
-#     if len(ip.split('.')) <= 4:
-#         octets = ip.split('.')          # Find the octets
-#         while len(octets) < 4:          # Handle partial IPs
-#             octets.append('0')
-#         IPInfo['ip'] = '.'.join(octets)
-#     IPInfo['binaryIP'] = toBinary(IPInfo['ip'])
-
-# def toBinary(arg):
-#     if interpret(arg, 'decimal'):
-#         return ''.join([bin(int(x)+256)[3:] for x in arg.split('.')])
-
-# interpret('192.168.1.1', 'binary')
-# print(toBinary('16.23'))
+    def _calcNetRange(self, wack):
+        # This seems really narly...
+        binary_id = self.toBinary(self.network_id)
+        startIP = int(binary_id)
+        startIP = self.toDecimal(startIP)
+        octets = startIP.split('.')
+        octets[3] = int(octets[3]) + 2
+        octets[3] = str(octets[3])
+        startIP = '.'.join(octets)
+        endIP = binary_id
+        endIP = endIP[:int(wack)]
+        while len(endIP) < 32:
+            endIP = endIP + '1'
+        endIP = int(endIP) - 1
+        endIP = self.toDecimal(str(endIP))
+        return startIP, endIP
