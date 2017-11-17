@@ -22,9 +22,9 @@ class Error(Exception):
 class InputError(Error):
     """Exception raised for errors in the input.
     
-    Attributes:
-        expression -- input expression in which the error occurred
-        message -- explanation of the error"""
+    Args:
+        expression: input expression in which the error occurred
+        message: explanation of the error"""
     
     def __init__(self, expression, message):
         self.expression = expression
@@ -34,19 +34,37 @@ class InputError(Error):
 # Tests
 #########
 class ValidateInput(object):
+    """Validates the users input.
+
+    Receives the string that was passed to the HandleInput class, runs
+    various tests to confirm the validity of the string. Also determines
+    whether a binary, dotted decimal, or dotted decimal + wack was passed
+
+    Args:
+        arg: A string containing <= 32 1's/0's
+             A string containing an IPv4 address (192.168.1.1)
+             A string containing an IPv4/wack address (192.168.1.1/24)
+    
+    Returns:
+        Nothing. It sets several self variables for use in the HandleInput
+        class
+    
+    Raises:
+        InputError: An error occurred because an invalid string was passed.
+    """
     def __init__(self, arg):
         self.arg = arg
+        # Handle wack addresses (192.168.1.1/24):
         if '/' in self.arg:
             self.wack = self.arg.split('/')[1]
             self.arg = self.arg.split('/')[0]
-        else:
-            self.arg = arg
         self.junk = JUNK
         self.nonbinary = NONBINARY
         self.reg = IPV4_RE
         self.junk = self.junk_finder(self.arg)
         self.ipv4 = self.valid_ipv4(self.arg)
         self.binary = self.valid_binary(self.arg)
+        # Decide what type of argument we were passed
         if self.junk:
             raise InputError(arg, 'Found invalid characters in provided string.')
             # self.validated = 'junk'
@@ -58,18 +76,36 @@ class ValidateInput(object):
             raise InputError(arg, 'Something very wrong happened.')
     
     def junk_finder(self, arg):
+        """Looks for invalid characters in the arg
+
+        Returns:
+            True if junk is found
+            False if junk is not found
+        """
         if any ((c in self.junk) for c in str(arg)):
             return True
         else:
             return False
 
     def valid_ipv4(self, arg):
+        """Determines if the arg is a valid IPv4 address
+
+        Returns:
+            True if the IPv4 address is valid
+            False if the IPv4 address is invalid
+        """
         if self.reg.match(str(arg)):
             return True
         else:
             return False
 
     def valid_binary(self, arg):
+        """Determines if the arg is a valid IPv4 binary representation
+
+        Returns:
+            True if the argument is a valid IPv4 binary expression
+            False if the argument is an invalid IPv4 binary expression
+        """
         if (any((d in self.nonbinary) for d in arg) or
                 len(arg) > 32):
             return False
@@ -80,9 +116,34 @@ class ValidateInput(object):
 # Do work
 ###########
 class HandleInput(ValidateInput):
+    """Main class of the module. Handles the user's input
+
+    Passes the argument to ValidateInput, and acts accordingly
+
+    Args:
+        arg: A string containing <= 32 1's/0's
+             A string containing an IPv4 address (192.168.1.1)
+             A string containing an IPv4/wack address (192.168.1.1/24)
+    
+    Returns:
+        inDecimal: The argument, converted to decimal
+        inBinary: The argument, converted to binary
+
+        Additionally if wack was included, the following will be available
+        binaryMask
+        decimalMask
+        network_info (max hosts, max subnets)
+        network_id
+        network_range (first IP, last IP - Does not include gateway, or broadcast)
+        network_stats: Dictionary containing all of these methods (not inDecimal
+                       or inBinary)
+    """
+    # TODO: Document the rest of the methods
+
     def __init__(self, arg):
         self.arg = arg
-        super().__init__(self.arg)
+        super().__init__(self.arg) # Inherit declarations from ValidateInput
+        # Set variables depending on the detected input
         if self.validated == 'ipv4':
             self.inDecimal = self.arg
             self.inBinary = self.toBinary(self.arg)
@@ -91,13 +152,13 @@ class HandleInput(ValidateInput):
             while len(self.arg) < 32:
                 self.arg = self.arg + '0'
             self.inBinary = self.arg
+        # We can do a lot more if an IP and a Wack was passed
         if self.wack:
             self.binaryMask = self.toMask(self.wack)
             self.decimalMask = self.toDecimal(self.binaryMask)
             self.network_info = self._calcNetworks(self.wack)
             self.network_id = self._calcNetID(self.inBinary, self.wack)
             self.network_range = self._calcNetRange(self.wack)
-            self.last_ip = self._calcNetRange(self.wack)
             self.network_stats = {'MaxSubnets': self.network_info[0],
                                   'MaxHosts': self.network_info[1],
                                   'Network ID': self.network_id,
